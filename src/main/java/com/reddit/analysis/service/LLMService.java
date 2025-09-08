@@ -4,15 +4,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.List;
 
 @Service
 public class LLMService {
+
+    private static final Logger logger = LoggerFactory.getLogger(LLMService.class);
 
     @Autowired
     private WebClient webClient;
@@ -20,11 +25,13 @@ public class LLMService {
     @Value("${gemini.api.key}")
     private String geminiApiKey;
 
+    @Value("${gemini.api.url}")
+    private String geminiApiUrl;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
     public String generateSummary(String text, String analysisType, String subredditName) {
-        if (geminiApiKey == null || geminiApiKey.trim().isEmpty() || "YOUR_GEMINI_API_KEY_HERE".equals(geminiApiKey)) {
+        if (isApiKeyInvalid()) {
             return "Please configure your Gemini API key in application.properties to enable AI-powered insights.";
         }
 
@@ -34,7 +41,7 @@ public class LLMService {
     }
 
     public String generateBusinessInsights(String text, List<String> keyTopics, String subredditName) {
-        if (geminiApiKey == null || geminiApiKey.trim().isEmpty() || "YOUR_GEMINI_API_KEY_HERE".equals(geminiApiKey)) {
+        if (isApiKeyInvalid()) {
             return "Please configure your Gemini API key in application.properties to enable AI-powered business insights.";
         }
 
@@ -43,11 +50,17 @@ public class LLMService {
         return cleanResponse(response);
     }
 
+    private boolean isApiKeyInvalid() {
+        return geminiApiKey == null || geminiApiKey.trim().isEmpty()
+                || "YOUR_GEMINI_API_KEY_HERE".equals(geminiApiKey);
+    }
+
     private String buildSummaryPrompt(String text, String analysisType, String subredditName) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("Analyze the following Reddit posts from r/").append(subredditName).append(" and provide a comprehensive professional summary. ");
-        prompt.append("Focus on the community's trends, challenges, and opportunities. ");
-        prompt.append("Write in clean, readable paragraphs without any markdown formatting or special characters.\n\n");
+        prompt.append("Analyze the following Reddit posts from r/").append(subredditName)
+                .append(" and provide a comprehensive professional summary. ")
+                .append("Focus on the community's trends, challenges, and opportunities. ")
+                .append("Write in clean, readable paragraphs without any markdown formatting or special characters.\n\n");
 
         prompt.append("Posts to analyze:\n");
         prompt.append(text.length() > 4000 ? text.substring(0, 4000) + "..." : text);
@@ -67,8 +80,9 @@ public class LLMService {
 
     private String buildBusinessInsightsPrompt(String text, List<String> keyTopics, String subredditName) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("Based on discussions in r/").append(subredditName).append(", provide actionable business insights for companies, recruiters, and stakeholders. ");
-        prompt.append("Write in clean, readable format without any markdown or special characters.\n\n");
+        prompt.append("Based on discussions in r/").append(subredditName)
+                .append(", provide actionable business insights for companies, recruiters, and stakeholders. ")
+                .append("Write in clean, readable format without any markdown or special characters.\n\n");
 
         prompt.append("Key discussion topics identified: ");
         prompt.append(String.join(", ", keyTopics));
@@ -96,7 +110,7 @@ public class LLMService {
                 .replaceAll("\\*\\*([^*]+)\\*\\*", "$1")  // Remove bold
                 .replaceAll("\\*([^*]+)\\*", "$1")        // Remove italic
                 .replaceAll("#{1,6}\\s*", "")             // Remove headers
-                .replaceAll("``````", "")       // Remove code blocks
+                .replaceAll("``````", "")                 // Remove code blocks
                 .replaceAll("`([^`]+)`", "$1")            // Remove inline code
                 .replaceAll("\\[([^\\]]+)\\]\\([^)]+\\)", "$1") // Remove links
                 .trim();
@@ -123,8 +137,11 @@ public class LLMService {
             generationConfig.put("maxOutputTokens", 1500);
             requestBody.set("generationConfig", generationConfig);
 
+            String apiEndpoint = geminiApiUrl + "?key=" + geminiApiKey;
+            logger.info("Calling Gemini API: {}", maskKey(apiEndpoint));
+
             String response = webClient.post()
-                    .uri(GEMINI_API_URL + "?key=" + geminiApiKey)
+                    .uri(apiEndpoint)
                     .header("Content-Type", "application/json")
                     .bodyValue(requestBody)
                     .retrieve()
@@ -144,9 +161,16 @@ public class LLMService {
 
             return "AI analysis completed but response format was unexpected.";
 
+        } catch (WebClientResponseException e) {
+            logger.error("Gemini API error: Status {} - {}", e.getRawStatusCode(), e.getResponseBodyAsString());
+            return "Gemini API error: " + e.getRawStatusCode() + " - please try again later.";
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Unexpected error while calling Gemini API", e);
             return "Error generating insights: " + e.getMessage();
         }
+    }
+
+    private String maskKey(String url) {
+        return url.replaceAll("(key=)[^&]+", "$1****");
     }
 }
