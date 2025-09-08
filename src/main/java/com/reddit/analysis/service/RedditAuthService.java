@@ -36,10 +36,12 @@ public class RedditAuthService {
             var response = webClient.post()
                     .uri("https://www.reddit.com/api/v1/access_token")
                     .headers(headers -> headers.setBasicAuth(clientId, clientSecret))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
                     .bodyValue(formData)
                     .retrieve()
                     .bodyToMono(TokenResponse.class)
                     .block();
+
 
             if (response != null) {
                 accessToken = response.access_token;

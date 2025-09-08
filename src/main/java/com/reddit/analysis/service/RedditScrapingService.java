@@ -97,11 +97,10 @@ public class RedditScrapingService {
     }
 
     private String buildRedditApiUrl(AnalysisRequest request, String sortType, int limit) {
-        String input = request.getInput().trim();
-        String subredditName = extractSubredditName(input);
-        return String.format("https://www.reddit.com/r/%s/%s.json?limit=%d&raw_json=1",
-                subredditName, sortType, limit);
+        String subredditName = extractSubredditName(request.getInput().trim());
+        return String.format("https://oauth.reddit.com/r/%s/%s?limit=%d", subredditName, sortType, limit);
     }
+
 
     private String extractSubredditName(String input) {
         if (input.contains("reddit.com/r/")) {
