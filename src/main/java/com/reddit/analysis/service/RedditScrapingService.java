@@ -36,18 +36,24 @@ public class RedditScrapingService {
     private List<PostData> scrapeThreadData(AnalysisRequest request) throws Exception {
         List<PostData> posts = new ArrayList<>();
         String cleanUrl = cleanThreadUrl(request.getInput());
-        String jsonUrl = cleanUrl + ".json";
 
-        System.out.println("Fetching thread data from: " + jsonUrl);
+        // Extract subreddit and thread ID from URL
+        // Example URL: https://www.reddit.com/r/SpringBoot/comments/1nakb4q/thread-title/
+        String[] parts = cleanUrl.split("/");
+        String subreddit = parts[4]; // r/SpringBoot
+        String threadId = parts[6];  // comments ID
 
-        int maxRetries = 3;          // Number of retries
+        String apiUrl = String.format("https://oauth.reddit.com/r/%s/comments/%s?raw_json=1", subreddit, threadId);
+        System.out.println("Fetching thread data from (OAuth): " + apiUrl);
+
+        int maxRetries = 3;
         int attempt = 0;
         Exception lastException = null;
 
         while (attempt < maxRetries) {
             try {
                 String jsonResponse = webClient.get()
-                        .uri(jsonUrl)
+                        .uri(apiUrl)
                         .header("Authorization", "Bearer " + redditAuthService.getAccessToken())
                         .header("User-Agent", "PostAnalysisBot/1.0 by u/Shrawann_07")
                         .retrieve()
@@ -60,13 +66,13 @@ public class RedditScrapingService {
                 lastException = e;
                 attempt++;
                 System.err.println("Attempt " + attempt + " failed: " + e.getMessage());
-                Thread.sleep(1000 * attempt); // exponential backoff: 1s, 2s, 3s
+                Thread.sleep(1000 * attempt); // exponential backoff
             }
         }
 
-        // If all retries fail, throw last exception
         throw lastException;
     }
+
 
 
     private String cleanThreadUrl(String url) {
