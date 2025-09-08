@@ -19,7 +19,6 @@ npm-debug.log*
 # React build
 build/
 
-target/
 
 # IDE files
 ../.idea/
