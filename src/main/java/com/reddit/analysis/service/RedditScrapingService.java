@@ -40,17 +40,34 @@ public class RedditScrapingService {
 
         System.out.println("Fetching thread data from: " + jsonUrl);
 
-        // Correct variable usage
-        String jsonResponse = webClient.get()
-                .uri(jsonUrl)
-                .header("Authorization", "Bearer " + redditAuthService.getAccessToken())
-                .header("User-Agent", "PostAnalysisBot/1.0 by u/Shrawann_07")
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
+        int maxRetries = 3;          // Number of retries
+        int attempt = 0;
+        Exception lastException = null;
 
-        return parseThreadJson(jsonResponse);
+        while (attempt < maxRetries) {
+            try {
+                String jsonResponse = webClient.get()
+                        .uri(jsonUrl)
+                        .header("Authorization", "Bearer " + redditAuthService.getAccessToken())
+                        .header("User-Agent", "PostAnalysisBot/1.0 by u/Shrawann_07")
+                        .retrieve()
+                        .bodyToMono(String.class)
+                        .block();
+
+                return parseThreadJson(jsonResponse);
+
+            } catch (Exception e) {
+                lastException = e;
+                attempt++;
+                System.err.println("Attempt " + attempt + " failed: " + e.getMessage());
+                Thread.sleep(1000 * attempt); // exponential backoff: 1s, 2s, 3s
+            }
+        }
+
+        // If all retries fail, throw last exception
+        throw lastException;
     }
+
 
     private String cleanThreadUrl(String url) {
         if (url.contains("?")) url = url.substring(0, url.indexOf("?"));
