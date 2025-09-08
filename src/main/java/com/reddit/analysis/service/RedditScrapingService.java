@@ -21,6 +21,10 @@ public class RedditScrapingService {
     @Autowired
     private WebClient webClient;
 
+    @Autowired
+    private RedditAuthService redditAuthService;
+
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public List<PostData> scrapeRedditData(AnalysisRequest request) throws Exception {
@@ -43,16 +47,18 @@ public class RedditScrapingService {
 
         String jsonResponse = webClient.get()
                 .uri(jsonUrl)
-                .header("User-Agent", "RedditAnalysisBot/1.0 (Educational Research)")
+                .header("Authorization", "Bearer " + redditAuthService.getAccessToken())
+                .header("User-Agent", "PostAnalysisBot/1.0 (Educational Research)")
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
+
 
         return parseThreadJson(jsonResponse);
     }
 
     private String cleanThreadUrl(String url) {
-        // Remove all the utm parameters and other query strings
+
         if (url.contains("?")) {
             url = url.substring(0, url.indexOf("?"));
         }
